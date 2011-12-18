@@ -1,23 +1,14 @@
 <?php
-use Everyman\Neo4j\Client;
+use Everyman\Neo4j\Client,
+    Everyman\Neo4j\Relationship,
+    Everyman\Neo4j\Node,
+    Everyman\Neo4j\Index\NodeIndex;
 
 class AclService
 {
 	protected $client;
-
-	protected $users = array(
-		'josh.adell@gmail.com' => array(
-			'email' => 'josh.adell@gmail.com',
-			'fullName' => 'Josh Adell',
-			'website' => 'http://joshadell.com',
-		),
-
-		'testmctestguy@example.com' => array(
-			'email' => 'testmctestguy@example.com',
-			'fullName' => 'Test McTestguy',
-			'website' => 'http://example.com',
-		),
-	);
+	protected $userIndex;
+	protected $userRef;
 
 	/**
 	 *
@@ -35,7 +26,8 @@ class AclService
 	 */
 	public function getUser($id)
 	{
-		return isset($this->users[$id]) ? $this->users[$id] : null;
+		$user = $this->getUserIndex()->findOne('email', $id);
+		return $user ? $user->getProperties() : null;
 	}
 
 	/**
@@ -45,6 +37,45 @@ class AclService
 	 */
 	public function getUsers()
 	{
-		return $this->users;
+		$users = array();
+		$userRels = $this->getUserRef()->getRelationships('USER', Relationship::DirectionOut);
+		foreach ($userRels as $userRel) {
+			$user = $userRel->getEndNode();
+			$users[$user->getProperty('email')] = $user->getProperties();
+		}
+
+		return $users;
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	// PROTECTED //////////////////////////////////////////////////////////////////
+	//////////////////////////////////////////////////////////////////////////////
+
+	/**
+	 * User lookup index
+	 *
+	 * @return NodeIndex
+	 */
+	protected function getUserIndex()
+	{
+		if (!$this->userIndex) {
+			$this->userIndex = new NodeIndex($this->client, 'USERS');
+		}
+		return $this->userIndex;
+	}
+
+	/**
+	 * User subreference node
+	 *
+	 * @return Node
+	 */
+	protected function getUserRef()
+	{
+		if (!$this->userRef) {
+			$ref = $this->client->getReferenceNode();
+			$userRefRels = $ref->getRelationships('USERS', Relationship::DirectionOut);
+			$this->userRef = $userRefRels[0]->getEndNode();
+		}
+		return $this->userRef;
 	}
 }
