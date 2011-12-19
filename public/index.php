@@ -5,6 +5,7 @@ require_once(__DIR__.'/bootstrap.php');
 $app->get('/', function () use ($app) {
 	return new JsonResponse(array(
 		'user' => $app['baseUrl'].'/user',
+		'group' => $app['baseUrl'].'/group',
 	));
 });
 
@@ -39,6 +40,16 @@ $app->get('/user/{id}/groups', function ($id) use ($app) {
 	}
 
 	return new JsonResponse($groups);
+});
+
+// Permissions for a single user
+$app->get('/user/{id}/permissions', function ($id) use ($app) {
+	$perms = array();
+	foreach ($app['acl']->getUserPermissions($id) as $perm) {
+		$perms[] = $app['formatter']->formatPermission($perm);
+	}
+
+	return new JsonResponse($perms);
 });
 
 // List all groups
@@ -76,6 +87,16 @@ $app->get('/group/{id}/members', function ($id) use ($app) {
 	}
 
 	return new JsonResponse($members);
+});
+
+// Permissions for a single group
+$app->get('/group/{id}/permissions', function ($id) use ($app) {
+	$perms = array();
+	foreach ($app['acl']->getGroupPermissions($id) as $perm) {
+		$perms[] = $app['formatter']->formatPermission($perm);
+	}
+
+	return new JsonResponse($perms);
 });
 
 $app->run();

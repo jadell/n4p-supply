@@ -24,7 +24,19 @@ class Formatter
 	{
 		$group['uri'] = $this->app['baseUrl'].'/group/'.rawurlencode($group['name']);
 		$group['members'] = $group['uri'].'/members';
+		$group['permissions'] = $group['uri'].'/permissions';
 		return $group;
+	}
+
+	/**
+	 * Format permission array
+	 *
+	 * @param array $perm
+	 * @return array
+	 */
+	public function formatPermission($perm)
+	{
+		return $perm;
 	}
 
 	/**
@@ -37,6 +49,7 @@ class Formatter
 	{
 		$user['uri'] = $this->app['baseUrl'].'/user/'.rawurlencode($user['email']);
 		$user['groups'] = $user['uri'].'/groups';
+		$user['permissions'] = $user['uri'].'/permissions';
 		return $user;
 	}
 }

@@ -18,24 +18,6 @@ class AclService
 	}
 
 	/**
-	 * List all groups
-	 *
-	 * @return array
-	 */
-	public function getGroups()
-	{
-		$cypher = "START z=node(0) MATCH (z)-[:GROUPS]->()-[:GROUP]->(g) RETURN g";
-		$query = new Query($this->client, $cypher);
-		$results = $query->getResultSet();
-
-		$groups = array();
-		foreach ($results as $result) {
-			$groups[] = $result['g']->getProperties();
-		}
-		return $groups;
-	}
-
-	/**
 	 * Get a single group
 	 *
 	 * @param string $id
@@ -43,7 +25,7 @@ class AclService
 	 */
 	public function getGroup($id)
 	{
-		$cypher = "START z=node(0) MATCH (z)-[:GROUPS]->()-[:GROUP]->(g) WHERE g.name={name} RETURN g";
+		$cypher = "START g=node:GROUPS(name={name}) RETURN g";
 		$query = new Query($this->client, $cypher, array('name' => $id));
 		$results = $query->getResultSet();
 
@@ -63,9 +45,7 @@ class AclService
 	public function getGroupMembers($id, $recurse=true)
 	{
 		$depth = $recurse ? '' : '1';
-		$cypher = "START z=node(0)".
-		          " MATCH (z)-[:GROUPS]->()-[:GROUP]->(g)<-[:MEMBER_OF*1..$depth]-(m)".
-		          " WHERE g.name={name} RETURN distinct m";
+		$cypher = "START g=node:GROUPS(name={name}) MATCH (g)<-[:MEMBER_OF*1..$depth]-(m) RETURN distinct m";
 		$query = new Query($this->client, $cypher, array('name' => $id));
 		$results = $query->getResultSet();
 
@@ -77,6 +57,43 @@ class AclService
 	}
 
 	/**
+	 * List all permissions for a group
+	 *
+	 * @param string $id
+	 * @return array
+	 */
+	public function getGroupPermissions($id)
+	{
+		$cypher = "START g=node:GROUPS(name={name}) MATCH (g)-[:MEMBER_OF*0..]->()-[:CAN]->(p) RETURN distinct p";
+		$query = new Query($this->client, $cypher, array('name' => $id));
+		$results = $query->getResultSet();
+
+		$perms = array();
+		foreach ($results as $result) {
+			$perms[] = $result['p']->getProperties();
+		}
+		return $perms;
+	}
+
+	/**
+	 * List all groups
+	 *
+	 * @return array
+	 */
+	public function getGroups()
+	{
+		$cypher = 'START g=node:GROUPS("name:*") RETURN g';
+		$query = new Query($this->client, $cypher);
+		$results = $query->getResultSet();
+
+		$groups = array();
+		foreach ($results as $result) {
+			$groups[] = $result['g']->getProperties();
+		}
+		return $groups;
+	}
+
+	/**
 	 * Get a single user
 	 *
 	 * @param string $id
@@ -84,7 +101,7 @@ class AclService
 	 */
 	public function getUser($id)
 	{
-		$cypher = "START z=node(0) MATCH (z)-[:USERS]->()-[:USER]->(u) WHERE u.email={email} RETURN u";
+		$cypher = "START u=node:USERS(email={email}) RETURN u";
 		$query = new Query($this->client, $cypher, array('email' => $id));
 		$results = $query->getResultSet();
 
@@ -104,9 +121,7 @@ class AclService
 	public function getUserGroups($id, $recurse=true)
 	{
 		$depth = $recurse ? '' : '1';
-		$cypher = "START z=node(0)".
-		          " MATCH (z)-[:USERS]->()-[:USER]->(u)-[:MEMBER_OF*1..$depth]->(g)".
-		          " WHERE u.email={email} RETURN distinct g";
+		$cypher = "START u=node:USERS(email={email}) MATCH (u)-[:MEMBER_OF*1..$depth]->(g) RETURN distinct g";
 		$query = new Query($this->client, $cypher, array('email' => $id));
 		$results = $query->getResultSet();
 
@@ -118,13 +133,32 @@ class AclService
 	}
 
 	/**
+	 * List all permissions for a user
+	 *
+	 * @param string $id
+	 * @return array
+	 */
+	public function getUserPermissions($id)
+	{
+		$cypher = "START u=node:USERS(email={email}) MATCH (u)-[:MEMBER_OF*0..]->()-[:CAN]->(p) RETURN distinct p";
+		$query = new Query($this->client, $cypher, array('email' => $id));
+		$results = $query->getResultSet();
+
+		$perms = array();
+		foreach ($results as $result) {
+			$perms[] = $result['p']->getProperties();
+		}
+		return $perms;
+	}
+
+	/**
 	 * List all users
 	 *
 	 * @return array
 	 */
 	public function getUsers()
 	{
-		$cypher = "START z=node(0) MATCH (z)-[:USERS]->()-[:USER]->(u) RETURN u";
+		$cypher = 'START u=node:USERS("email:*") RETURN u';
 		$query = new Query($this->client, $cypher);
 		$results = $query->getResultSet();
 

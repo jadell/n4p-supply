@@ -2,6 +2,7 @@
 require_once(__DIR__.'/../public/neo4jphp.phar');
 
 use Everyman\Neo4j\Client,
+    Everyman\Neo4j\Cypher\Query,
     Everyman\Neo4j\Node,
     Everyman\Neo4j\Relationship,
     Everyman\Neo4j\Index\NodeIndex;
@@ -10,48 +11,33 @@ $client = new Client();
 $ref = $client->getReferenceNode();
 $userIndex = new NodeIndex($client, 'USERS');
 $groupIndex = new NodeIndex($client, 'GROUPS');
+$permIndex = new NodeIndex($client, 'PERMISSIONS');
 
-// Remove users if any exist
-$userRefRels = $ref->getRelationships('USERS', Relationship::DirectionOut);
-foreach ($userRefRels as $userRefRel) {
-	$userRef = $userRefRel->getEndNode();
-	$userRels = $userRef->getRelationships('USER', Relationship::DirectionOut);
-	foreach ($userRels as $userRel) {
-		$user = $userRel->getEndNode();
-		$groupRels = $user->getRelationships('MEMBER_OF', Relationship::DirectionOut);
-		foreach ($groupRels as $groupRel) {
-			$groupRel->delete();
+// Order matters here!
+$cleanupQueries = array(
+	"START z=node(0) MATCH (z)-[:USERS]->()-[:USER]->(n) RETURN n",
+	"START z=node(0) MATCH (z)-[:GROUPS]->()-[:GROUP]->(n) RETURN n",
+	"START z=node(0) MATCH (z)-[:PERMISSIONS]->()-[:PERMISSION]->(n) RETURN n",
+	"START z=node(0) MATCH (z)-[:USERS]->(n) RETURN n",
+	"START z=node(0) MATCH (z)-[:GROUPS]->(n) RETURN n",
+	"START z=node(0) MATCH (z)-[:PERMISSIONS]->(n) RETURN n",
+);
+
+foreach ($cleanupQueries as $cypher) {
+	$query = new Query($client, $cypher);
+	$results = $query->getResultSet();
+	foreach ($results as $result) {
+		$node = $result['n'];
+		foreach ($node->getRelationships() as $rel) {
+			$rel->delete();
 		}
-
-		$userRel->delete();
-		$user->delete();
+		$node->delete();
 	}
-
-	$userRefRel->delete();
-	$userRef->delete();
 }
+
 $userIndex->delete();
-
-// Remove groups if any exist
-$groupRefRels = $ref->getRelationships('GROUPS', Relationship::DirectionOut);
-foreach ($groupRefRels as $groupRefRel) {
-	$groupRef = $groupRefRel->getEndNode();
-	$groupRels = $groupRef->getRelationships('GROUP', Relationship::DirectionOut);
-	foreach ($groupRels as $groupRel) {
-		$group = $groupRel->getEndNode();
-		$subGroupRels = $group->getRelationships('MEMBER_OF');
-		foreach ($subGroupRels as $subGroupRel) {
-			$subGroupRel->delete();
-		}
-
-		$groupRel->delete();
-		$group->delete();
-	}
-
-	$groupRefRel->delete();
-	$groupRef->delete();
-}
 $groupIndex->delete();
+$permIndex->delete();
 
 // GROUP DATA
 $groupsData = array(
@@ -88,6 +74,57 @@ $groupsData['Admins']['ref']->relateTo($groupsData['Writers']['ref'], 'MEMBER_OF
 $groupsData['Admins']['ref']->relateTo($groupsData['Auditors']['ref'], 'MEMBER_OF')->save();
 $groupsData['Writers']['ref']->relateTo($groupsData['Readers']['ref'], 'MEMBER_OF')->save();
 $groupsData['Auditors']['ref']->relateTo($groupsData['Readers']['ref'], 'MEMBER_OF')->save();
+
+// PERMISSIONS DATA
+$permsData = array(
+	'edit-users' => array(
+		'name' => 'edit-users',
+		'description' => 'Create and edit users, change user group assignments',
+	),
+	'view-users' => array(
+		'name' => 'view-users',
+		'description' => 'View user data, groups and permissions',
+	),
+	'edit-groups' => array(
+		'name' => 'edit-groups',
+		'description' => 'Create and edit groups, add and remove users from groups',
+	),
+	'view-groups' => array(
+		'name' => 'view-groups',
+		'description' => 'View group data, group membership and permissions',
+	),
+	'edit-permissions' => array(
+		'name' => 'edit-permissions',
+		'description' => 'Create and edit permissions',
+	),
+	'grant-permissions' => array(
+		'name' => 'grant-permissions',
+		'description' => 'Grant permissions to users and groups',
+	),
+	'mark-questionable' => array(
+		'name' => 'mark-questionable',
+		'description' => 'Mark a permission grant as questionable',
+	),
+);
+$permIndex->save();
+$permRef = $client->makeNode()->setProperty('name', 'PERMISSIONS')->save();
+$ref->relateTo($permRef, 'PERMISSIONS')->save();
+foreach ($permsData as &$permData) {
+	$perm = $client->makeNode()->setProperties($permData)->save();
+	$permRef->relateTo($perm, 'PERMISSION')->save();
+	$permIndex->add($perm, 'name', $perm->getProperty('name'));
+
+	$permData['ref'] = $perm;
+}
+
+$groupsData['Admins']['ref']->relateTo($permsData['edit-users']['ref'], 'CAN')->save();
+$groupsData['Admins']['ref']->relateTo($permsData['edit-groups']['ref'], 'CAN')->save();
+$groupsData['Admins']['ref']->relateTo($permsData['edit-permissions']['ref'], 'CAN')->save();
+$groupsData['Admins']['ref']->relateTo($permsData['mark-questionable']['ref'], 'CAN')->save();
+$groupsData['Readers']['ref']->relateTo($permsData['view-users']['ref'], 'CAN')->save();
+$groupsData['Readers']['ref']->relateTo($permsData['view-groups']['ref'], 'CAN')->save();
+$groupsData['Auditors']['ref']->relateTo($permsData['mark-questionable']['ref'], 'CAN')->save();
+
 
 // USER DATA
 $usersData = array(
@@ -128,4 +165,5 @@ $usersData['testmctestguy@example.com']['ref']->relateTo($groupsData['Auditors']
 $usersData['teveryman@everymansoftware.com']['ref']->relateTo($groupsData['Writers']['ref'], 'MEMBER_OF')->save();
 $usersData['joeuser@example.com']['ref']->relateTo($groupsData['Readers']['ref'], 'MEMBER_OF')->save();
 
+$usersData['josh.adell@gmail.com']['ref']->relateTo($permsData['grant-permissions']['ref'], 'CAN')->save();
 
