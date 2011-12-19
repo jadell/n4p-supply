@@ -11,11 +11,8 @@ $app->get('/', function () use ($app) {
 // List all users
 $app->get('/user', function () use ($app) {
 	$users = array();
-	foreach ($app['acl']->getUsers() as $id => $user) {
-		$users[] = array(
-			'uri' => $app['baseUrl'].'/user/'.rawurlencode($id),
-			'email' => $user['email'],
-		);
+	foreach ($app['acl']->getUsers() as $user) {
+		$users[] = $app['formatter']->formatUser($user);
 	}
 
 	return new JsonResponse($users);
@@ -27,11 +24,58 @@ $app->get('/user/{id}', function ($id) use ($app) {
 	if (!$user) {
 		return new JsonResponse($user, 404);
 	}
-
-	$user['uri'] = $app['baseUrl'].'/user/'.rawurlencode($id);
-	$user['groups'] = $user['uri'].'/groups';
-	$user['permissions'] = $user['uri'].'/permissions';
+	
+	$user = $app['formatter']->formatUser($user);
 	return new JsonResponse($user);
+});
+
+// Groups for a single user
+$app->get('/user/{id}/groups', function ($id) use ($app) {
+	$direct = (boolean)$app['request']->get('direct');
+
+	$groups = array();
+	foreach ($app['acl']->getUserGroups($id, !$direct) as $group) {
+		$groups[] = $app['formatter']->formatGroup($group);
+	}
+
+	return new JsonResponse($groups);
+});
+
+// List all groups
+$app->get('/group', function () use ($app) {
+	$groups = array();
+	foreach ($app['acl']->getGroups() as $group) {
+		$groups[] = $app['formatter']->formatGroup($group);
+	}
+
+	return new JsonResponse($groups);
+});
+
+// Single group
+$app->get('/group/{id}', function ($id) use ($app) {
+	$group = $app['acl']->getGroup($id);
+	if (!$group) {
+		return new JsonResponse($group, 404);
+	}
+
+	$group = $app['formatter']->formatGroup($group);
+	return new JsonResponse($group);
+});
+
+// List all members in a group
+$app->get('/group/{id}/members', function ($id) use ($app) {
+	$direct = (boolean)$app['request']->get('direct');
+
+	$members = array();
+	foreach ($app['acl']->getGroupMembers($id, !$direct) as $member) {
+		if (isset($member['email'])) {
+			$members[] = $app['formatter']->formatUser($member);
+		} else {
+			$members[] = $app['formatter']->formatGroup($member);
+		}
+	}
+
+	return new JsonResponse($members);
 });
 
 $app->run();
