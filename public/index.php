@@ -52,6 +52,15 @@ $app->get('/user/{id}/permissions', function ($id) use ($app) {
 	return new JsonResponse($perms);
 });
 
+// Permissions for a single user
+$app->get('/user/{id}/permissions/{permission}', function ($id, $permission) use ($app) {
+	if ($app['acl']->doesUserHavePermission($id, $permission)) {
+		return new JsonResponse(null, 204);
+	} else {
+		return new JsonResponse(null, 404);
+	}
+});
+
 // List all groups
 $app->get('/group', function () use ($app) {
 	$groups = array();

@@ -18,6 +18,22 @@ class AclService
 	}
 
 	/**
+	 * Has the requested permission been granted to the user?
+	 *
+	 * @param string $id
+	 * @param string $perm
+	 * @return boolean
+	 */
+	public function doesUserHavePermission($id, $permission)
+	{
+		$cypher = "START u=node:USERS(email={email}), p=node:PERMISSIONS(name={name})".
+		          " MATCH (u)-[:MEMBER_OF*0..]->()-[:CAN]->(p) RETURN distinct p";
+		$query = new Query($this->client, $cypher, array('email' => $id, 'name' => $permission));
+		$results = $query->getResultSet();
+		return count($results) > 0;
+	}
+
+	/**
 	 * Get a single group
 	 *
 	 * @param string $id
